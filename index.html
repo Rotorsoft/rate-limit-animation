@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>Debounce vs Throttle vs Rate Limit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #0a0e1a;
+    background-image:
+      radial-gradient(ellipse at 20% 0%, #1e1b4b33 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, #0c4a6e22 0%, transparent 50%);
+    color: white;
+    margin: 0;
+    padding: 36px 50px;
+    min-height: 100vh;
+  }
+
+  .header { margin-bottom: 32px; }
+
+  h1 {
+    margin: 0 0 6px;
+    font-size: 32px;
+    font-weight: 900;
+    letter-spacing: -1px;
+    background: linear-gradient(135deg, #a78bfa, #38bdf8, #22c55e);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    color: #475569;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  /* ---- sections ---- */
+  .section { margin-bottom: 10px; }
+
+  .section-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+    height: 26px;
+  }
+
+  .section-name {
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: -0.2px;
+    color: #e2e8f0;
+    flex-shrink: 0;
+  }
+
+  .section-desc {
+    font-size: 12px;
+    font-weight: 500;
+    color: #64748b;
+    flex-shrink: 0;
+  }
+
+  .input-section .section-name { color: #38bdf8; }
+  .debounce-section .section-name { color: #c4b5fd; }
+  .throttle-section .section-name { color: #fdba74; }
+  .rate-section .section-name { color: #f9a8d4; }
+
+  .section-controls {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .ctrl {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .ctrl input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 80px;
+    height: 3px;
+    border-radius: 2px;
+    background: #1e293b;
+    outline: none;
+    cursor: pointer;
+    border: 1px solid #ffffff0a;
+  }
+
+  .ctrl input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid #0a0e1a;
+    cursor: pointer;
+  }
+
+  .debounce-section .ctrl input[type="range"]::-webkit-slider-thumb {
+    background: #a78bfa; box-shadow: 0 0 6px #a78bfa44;
+  }
+  .throttle-section .ctrl input[type="range"]::-webkit-slider-thumb {
+    background: #fb923c; box-shadow: 0 0 6px #fb923c44;
+  }
+  .rate-section .ctrl input[type="range"]::-webkit-slider-thumb {
+    background: #f472b6; box-shadow: 0 0 6px #f472b644;
+  }
+
+  .ctrl-val {
+    font-size: 13px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    color: #94a3b8;
+    white-space: nowrap;
+    min-width: 38px;
+  }
+
+  .debounce-section .ctrl-val { color: #c4b5fd; }
+  .throttle-section .ctrl-val { color: #fdba74; }
+  .rate-section .ctrl-val { color: #f9a8d4; }
+
+  .track {
+    position: relative;
+    height: 44px;
+    border: 1px solid #ffffff0a;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #111827;
+    box-shadow: inset 0 2px 8px #00000044;
+  }
+
+  /* ---- traveling window zone ---- */
+  .zone {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+    border-radius: 4px;
+  }
+
+  /* ---- ruler ---- */
+  .ruler {
+    position: relative;
+    height: 20px;
+    overflow: hidden;
+    margin-bottom: 4px;
+  }
+
+  .ruler-tick {
+    position: relative;
+    flex-shrink: 0;
+    height: 100%;
+  }
+
+  .ruler-tick::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 1px;
+    height: 8px;
+    background: #334155;
+  }
+
+  .ruler-tick.major::before {
+    height: 16px;
+    background: #475569;
+  }
+
+  .ruler-tick .tick-label {
+    position: absolute;
+    left: 5px;
+    top: 0;
+    font-size: 11px;
+    font-weight: 600;
+    color: #475569;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .grid-line {
+    position: absolute;
+    top: 0;
+    width: 1px;
+    height: 100%;
+    background: #ffffff06;
+    pointer-events: none;
+  }
+
+  .grid-line.major { background: #ffffff0f; }
+
+  /* ---- dots ---- */
+  .dot {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    border-radius: 50%;
+    z-index: 2;
+  }
+
+  .dot.input {
+    background: #38bdf8;
+    width: 8px;
+    height: 8px;
+    opacity: 0.6;
+    box-shadow: 0 0 4px #38bdf844;
+  }
+
+  .dot.ignored {
+    width: 6px;
+    height: 6px;
+    background: #94a3b8;
+  }
+
+  .dot.handled {
+    width: 16px;
+    height: 16px;
+    opacity: 1;
+    box-shadow: 0 0 10px currentColor, 0 0 24px #00000044;
+  }
+
+  /* ---- connector ---- */
+  .connector {
+    position: absolute;
+    top: 50%;
+    height: 2px;
+    transform: translateY(-50%);
+    border-radius: 1px;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0;
+    animation: connector-fade 1.5s ease-out forwards;
+  }
+
+  @keyframes connector-fade {
+    0%   { opacity: 0.5; }
+    100% { opacity: 0; }
+  }
+
+  @keyframes fly {
+    from { left: 0%; }
+    to   { left: 100%; }
+  }
+
+  @keyframes ignored-fade {
+    0%   { opacity: 0.18; }
+    55%  { opacity: 0.15; }
+    100% { opacity: 0; }
+  }
+
+  @keyframes pop {
+    0%   { transform: translateY(-50%) scale(0); opacity: 0; }
+    40%  { transform: translateY(-50%) scale(1.6); opacity: 1; }
+    70%  { transform: translateY(-50%) scale(0.9); opacity: 1; }
+    100% { transform: translateY(-50%) scale(1); opacity: 1; }
+  }
+
+  .track.flash { transition: none; }
+
+  .track.dimmed {
+    opacity: 0.25;
+    transition: opacity 0.2s ease;
+  }
+
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #334155, transparent);
+    margin: 16px 0;
+  }
+
+  .now-line {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    background: linear-gradient(180deg, #ffffff33, #ffffff11);
+    z-index: 3;
+    pointer-events: none;
+  }
+
+  /* ---- per-section colors ---- */
+  .debounce-section .track { border-color: #a78bfa15; }
+  .debounce-section .dot.handled { color: #a78bfa; background: #a78bfa; }
+  .debounce-section .track.flash { background: #a78bfa0c; border-color: #a78bfa44; }
+
+  .throttle-section .track { border-color: #fb923c15; }
+  .throttle-section .dot.handled { color: #fb923c; background: #fb923c; }
+  .throttle-section .track.flash { background: #fb923c0c; border-color: #fb923c44; }
+
+  .rate-section .track { border-color: #f472b615; }
+  .rate-section .dot.handled { color: #f472b6; background: #f472b6; }
+  .rate-section .track.flash { background: #f472b60c; border-color: #f472b644; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Debounce vs Throttle vs Rate Limit</h1>
+  <div class="subtitle">Watch how each strategy filters high-frequency event streams in real time</div>
+</div>
+
+<div class="ruler" id="ruler"></div>
+
+<div class="section input-section">
+  <div class="section-head">
+    <span class="section-name">Raw Events</span>
+    <span class="section-desc">continuous random input</span>
+  </div>
+  <div class="track" id="input-track"><div class="now-line"></div></div>
+</div>
+
+<div class="divider"></div>
+
+<div class="section debounce-section">
+  <div class="section-head">
+    <span class="section-name">Debounce</span>
+    <span class="section-desc" id="debounce-desc">fires after 250ms of quiet</span>
+    <div class="section-controls">
+      <div class="ctrl">
+        <input type="range" id="debounce-slider" min="100" max="800" step="50" value="250" />
+        <span class="ctrl-val" id="timing-debounce">250ms</span>
+      </div>
+    </div>
+  </div>
+  <div class="track" id="debounce-track"><div class="now-line"></div></div>
+</div>
+
+<div class="section throttle-section">
+  <div class="section-head">
+    <span class="section-name">Throttle</span>
+    <span class="section-desc" id="throttle-desc">at most once per 1.0s</span>
+    <div class="section-controls">
+      <div class="ctrl">
+        <input type="range" id="throttle-slider" min="200" max="3000" step="100" value="1000" />
+        <span class="ctrl-val" id="timing-throttle">1.0s</span>
+      </div>
+    </div>
+  </div>
+  <div class="track" id="throttle-track"><div class="now-line"></div></div>
+</div>
+
+<div class="section rate-section">
+  <div class="section-head">
+    <span class="section-name">Rate Limit</span>
+    <span class="section-desc" id="rate-desc">3 calls per 2.0s window</span>
+    <div class="section-controls">
+      <div class="ctrl">
+        <input type="range" id="rate-count-slider" min="1" max="8" step="1" value="3" />
+        <span class="ctrl-val" id="timing-rate-count">3x</span>
+      </div>
+      <div class="ctrl">
+        <input type="range" id="rate-slider" min="500" max="5000" step="250" value="2000" />
+        <span class="ctrl-val" id="timing-rate">2.0s</span>
+      </div>
+    </div>
+  </div>
+  <div class="track" id="rate-track"><div class="now-line"></div></div>
+</div>
+
+<script>
+const DURATION = 8000;
+const TICK_INTERVAL = 500;
+
+const inputTrack    = document.getElementById("input-track");
+const debounceTrack = document.getElementById("debounce-track");
+const throttleTrack = document.getElementById("throttle-track");
+const rateTrack     = document.getElementById("rate-track");
+const ruler         = document.getElementById("ruler");
+const allTracks     = [inputTrack, debounceTrack, throttleTrack, rateTrack];
+
+let debounceDelay = 250;
+let throttleInterval = 1000;
+let rateCount = 3;
+let rateWindow = 2000;
+
+// ---- Per-scenario slider pausing ----
+const paused = { debounce: false, throttle: false, rate: false };
+
+function resetDebounceState() {
+  clearTimeout(debounceTimeout);
+}
+function resetThrottleState() {
+  clearTimeout(throttleTimer);
+  clearTimeout(throttleZoneTimer);
+  throttleZoneEl.style.opacity = "0";
+  throttleBlocked = false;
+  lastThrottleHandledTime = 0;
+}
+function resetRateState() {
+  clearTimeout(rateZoneTimer);
+  rateZoneEl.style.opacity = "0";
+  timestamps = [];
+  lastRateHandledTime = 0;
+}
+
+const trackForKey = { debounce: debounceTrack, throttle: throttleTrack, rate: rateTrack };
+
+function bindSliderPause(sliderId, key, resetFn) {
+  const el = document.getElementById(sliderId);
+  const track = trackForKey[key];
+  const startPause = () => { paused[key] = true; track.classList.add("dimmed"); resetFn(); };
+  const endPause = () => { paused[key] = false; track.classList.remove("dimmed"); resetFn(); };
+  el.addEventListener("pointerdown", startPause);
+  el.addEventListener("pointerup", endPause);
+  el.addEventListener("pointercancel", endPause);
+}
+
+bindSliderPause("debounce-slider", "debounce", resetDebounceState);
+bindSliderPause("throttle-slider", "throttle", resetThrottleState);
+bindSliderPause("rate-count-slider", "rate", resetRateState);
+bindSliderPause("rate-slider", "rate", resetRateState);
+
+// Safety: release on global pointerup in case pointer leaves slider
+window.addEventListener("pointerup", () => {
+  if (paused.debounce) { paused.debounce = false; debounceTrack.classList.remove("dimmed"); resetDebounceState(); }
+  if (paused.throttle) { paused.throttle = false; throttleTrack.classList.remove("dimmed"); resetThrottleState(); }
+  if (paused.rate) { paused.rate = false; rateTrack.classList.remove("dimmed"); resetRateState(); }
+});
+
+// ---- Sliders ----
+function fmtMs(ms) { return ms < 1000 ? ms + "ms" : (ms / 1000).toFixed(1) + "s"; }
+
+function updateDescs() {
+  document.getElementById("debounce-desc").textContent = "fires after " + fmtMs(debounceDelay) + " of quiet";
+  document.getElementById("throttle-desc").textContent = "at most once per " + fmtMs(throttleInterval);
+  document.getElementById("rate-desc").textContent = rateCount + " calls per " + fmtMs(rateWindow) + " window";
+}
+
+document.getElementById("debounce-slider").addEventListener("input", e => {
+  debounceDelay = +e.target.value;
+  document.getElementById("timing-debounce").textContent = fmtMs(debounceDelay);
+  updateDescs();
+});
+
+document.getElementById("throttle-slider").addEventListener("input", e => {
+  throttleInterval = +e.target.value;
+  document.getElementById("timing-throttle").textContent = fmtMs(throttleInterval);
+  updateDescs();
+});
+
+document.getElementById("rate-count-slider").addEventListener("input", e => {
+  rateCount = +e.target.value;
+  document.getElementById("timing-rate-count").textContent = rateCount + "x";
+  updateDescs();
+});
+
+document.getElementById("rate-slider").addEventListener("input", e => {
+  rateWindow = +e.target.value;
+  document.getElementById("timing-rate").textContent = fmtMs(rateWindow);
+  updateDescs();
+});
+
+// ---- Ruler ----
+let startTime = Date.now();
+
+function spawnRulerTick() {
+  const elapsed = Date.now() - startTime;
+  const seconds = Math.round(elapsed / TICK_INTERVAL) * TICK_INTERVAL;
+  const isMajor = seconds % 1000 === 0;
+
+  const tick = document.createElement("div");
+  tick.className = "ruler-tick" + (isMajor ? " major" : "");
+  tick.style.position = "absolute";
+  tick.style.animation = `fly ${DURATION}ms linear forwards`;
+  tick.style.width = "1px";
+
+  if (isMajor) {
+    const lbl = document.createElement("span");
+    lbl.className = "tick-label";
+    lbl.textContent = (seconds / 1000).toFixed(0) + "s";
+    tick.appendChild(lbl);
+  }
+
+  ruler.appendChild(tick);
+  setTimeout(() => tick.remove(), DURATION);
+
+  allTracks.forEach(track => {
+    const line = document.createElement("div");
+    line.className = "grid-line" + (isMajor ? " major" : "");
+    line.style.animation = `fly ${DURATION}ms linear forwards`;
+    track.appendChild(line);
+    setTimeout(() => line.remove(), DURATION);
+  });
+}
+
+setInterval(spawnRulerTick, TICK_INTERVAL);
+spawnRulerTick();
+
+// ---- Traveling zone (debounce only) ----
+// Scrolls with the fly animation, extends right from handled dot.
+function spawnZone(track, windowMs, color) {
+  const el = document.createElement("div");
+  el.className = "zone";
+  const widthPct = (windowMs / DURATION) * 100;
+  el.style.width = widthPct + "%";
+  el.style.background = `${color}12`;
+  el.style.borderLeft = `2px solid ${color}40`;
+  el.style.borderRight = `2px solid ${color}40`;
+  el.style.animation = `fly ${DURATION}ms linear forwards`;
+  track.appendChild(el);
+  setTimeout(() => el.remove(), DURATION);
+}
+
+// ---- Static window zone (throttle & rate limit) ----
+// Pinned at the now-line so events clearly appear inside it.
+// Fades out when the window expires.
+function createStaticZone(track, color, bgHex, borderHex) {
+  bgHex = bgHex || "18";
+  borderHex = borderHex || "55";
+  const el = document.createElement("div");
+  el.className = "zone";
+  el.style.left = "0";
+  el.style.width = "0";
+  el.style.opacity = "0";
+  el.style.background = `${color}${bgHex}`;
+  el.style.borderLeft = `2px solid ${color}${borderHex}`;
+  el.style.borderRight = `2px solid ${color}${borderHex}`;
+  el.style.transition = "opacity 0.2s ease";
+  track.appendChild(el);
+  return el;
+}
+
+const throttleZoneEl = createStaticZone(throttleTrack, "#fb923c");
+const rateZoneEl = createStaticZone(rateTrack, "#f472b6", "22", "66");
+let throttleZoneTimer = null;
+let rateZoneTimer = null;
+
+function showStaticZone(zoneEl, windowMs, onExpire) {
+  const widthPct = (windowMs / DURATION) * 100;
+  zoneEl.style.width = widthPct + "%";
+  zoneEl.style.opacity = "1";
+  return setTimeout(() => {
+    zoneEl.style.opacity = "0";
+    if (onExpire) onExpire();
+  }, windowMs);
+}
+
+// ---- Connector ----
+// pointLeft=false (default): extends RIGHT toward older events (debounce)
+// pointLeft=true: extends LEFT toward newer ignored events (throttle/rate)
+//   Starts off-screen, scrolls into view, then fades.
+function spawnConnector(track, delayMs, color, pointLeft) {
+  if (delayMs < 30) return;
+  const el = document.createElement("div");
+  el.className = "connector";
+  const widthPct = (delayMs / DURATION) * 100;
+  el.style.width = widthPct + "%";
+  if (pointLeft) {
+    el.style.marginLeft = -widthPct + "%";
+    el.style.background = `linear-gradient(90deg, ${color}00, ${color})`;
+    el.style.opacity = "0.5";
+    el.style.animation = `fly ${DURATION}ms linear forwards`;
+    // Delay fade until connector has scrolled into view
+    setTimeout(() => {
+      el.style.transition = "opacity 1.5s ease-out";
+      el.style.opacity = "0";
+    }, delayMs);
+  } else {
+    el.style.background = `linear-gradient(90deg, ${color}, ${color}00)`;
+    el.style.animation = `fly ${DURATION}ms linear forwards, connector-fade 2s ease-out forwards`;
+  }
+  track.appendChild(el);
+  setTimeout(() => el.remove(), DURATION);
+}
+
+// ---- Dots ----
+function spawnDot(track, type) {
+  const el = document.createElement("div");
+  el.className = "dot " + type;
+  if (type === "ignored") {
+    el.style.animation = `fly ${DURATION}ms linear forwards, ignored-fade ${DURATION}ms ease-in forwards`;
+  } else if (type === "handled") {
+    el.style.animation = `pop 0.35s cubic-bezier(.34,1.56,.64,1), fly ${DURATION}ms linear forwards`;
+  } else {
+    el.style.animation = `fly ${DURATION}ms linear forwards`;
+  }
+  track.appendChild(el);
+  setTimeout(() => el.remove(), DURATION);
+
+  if (type === "handled") {
+    track.classList.add("flash");
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        track.classList.remove("flash");
+        track.style.transition = "background 0.5s, border-color 0.5s";
+      });
+    });
+  }
+}
+
+// ---- Burst tracking ----
+let burstStartTime = 0;
+
+/////// Debounce ///////
+let debounceTimeout;
+let debouncedFn;
+
+function rebuildDebounce() {
+  clearTimeout(debounceTimeout);
+  debouncedFn = () => {
+    clearTimeout(debounceTimeout);
+    const capturedBurstStart = burstStartTime;
+    debounceTimeout = setTimeout(() => {
+      if (paused.debounce) return;
+      spawnDot(debounceTrack, "handled");
+      spawnConnector(debounceTrack, Date.now() - capturedBurstStart, "#a78bfa");
+      spawnZone(debounceTrack, debounceDelay, "#a78bfa");
+    }, debounceDelay);
+  };
+}
+rebuildDebounce();
+
+/////// Throttle ///////
+let throttleBlocked = false;
+let throttleTimer;
+let throttledFn;
+let lastThrottleHandledTime = 0;
+
+function rebuildThrottle() {
+  clearTimeout(throttleTimer);
+  throttleBlocked = false;
+  throttledFn = () => {
+    if (!throttleBlocked) {
+      const now = Date.now();
+      spawnDot(throttleTrack, "handled");
+      const connFrom = lastThrottleHandledTime > burstStartTime
+        ? now - lastThrottleHandledTime
+        : now - burstStartTime;
+      spawnConnector(throttleTrack, throttleInterval, "#fb923c", true);
+      clearTimeout(throttleZoneTimer);
+      throttleZoneTimer = showStaticZone(throttleZoneEl, throttleInterval);
+      lastThrottleHandledTime = now;
+      throttleBlocked = true;
+      throttleTimer = setTimeout(() => throttleBlocked = false, throttleInterval);
+      return true;
+    }
+    return false;
+  };
+}
+rebuildThrottle();
+
+/////// Rate Limit ///////
+let timestamps = [];
+let lastRateHandledTime = 0;
+
+function rateLimited() {
+  const now = Date.now();
+  timestamps = timestamps.filter(t => now - t < rateWindow);
+  if (timestamps.length < rateCount) {
+    timestamps.push(now);
+    spawnDot(rateTrack, "handled");
+    const connFrom = lastRateHandledTime > burstStartTime
+      ? now - lastRateHandledTime
+      : now - burstStartTime;
+    spawnConnector(rateTrack, rateWindow, "#f472b6", true);
+    // Show zone on every handled call, fade rateWindow after the last one
+    clearTimeout(rateZoneTimer);
+    rateZoneTimer = showStaticZone(rateZoneEl, rateWindow, () => {
+      // When window expires, spawn connector covering the full ignored gap
+      if (lastRateHandledTime && !paused.rate) {
+        spawnConnector(rateTrack, Date.now() - lastRateHandledTime, "#f472b6", true);
+      }
+    });
+    lastRateHandledTime = now;
+    return true;
+  }
+  return false;
+}
+
+/////// Nearly Continuous Random Input ///////
+
+let burstCount = 0;
+const burstSize = () => Math.floor(Math.random() * 20) + 12; // 12-31 events
+let currentBurstTarget = burstSize();
+
+function scheduleEvent() {
+  burstCount++;
+
+  if (burstCount >= currentBurstTarget) {
+    // Skewed random gaps: mostly short, occasionally long
+    // Math.random()^0.5 biases toward larger values → wider spread
+    const r = Math.random();
+    const pause = r < 0.3
+      ? 80 + Math.random() * 170    // 30% chance: short 80-250ms
+      : r < 0.7
+        ? 250 + Math.random() * 350  // 40% chance: medium 250-600ms
+        : 500 + Math.random() * 500; // 30% chance: long 500-1000ms
+    burstCount = 0;
+    currentBurstTarget = burstSize();
+    setTimeout(scheduleEvent, pause);
+    return;
+  }
+
+  if (burstCount === 1) {
+    burstStartTime = Date.now();
+    lastThrottleHandledTime = 0;
+    lastRateHandledTime = 0;
+  }
+
+  const delay = Math.random() * 80 + 20; // 20-100ms — near continuous
+  setTimeout(() => {
+    spawnDot(inputTrack, "input");
+
+    // Debounce — skip when its slider is being dragged
+    if (!paused.debounce) {
+      spawnDot(debounceTrack, "ignored");
+      debouncedFn();
+    }
+
+    // Throttle — skip when its slider is being dragged
+    if (!paused.throttle) {
+      if (!throttledFn()) {
+        spawnDot(throttleTrack, "ignored");
+      }
+    }
+
+    // Rate limit — skip when its slider is being dragged
+    if (!paused.rate) {
+      if (!rateLimited()) {
+        spawnDot(rateTrack, "ignored");
+      }
+    }
+
+    scheduleEvent();
+  }, delay);
+}
+
+scheduleEvent();
+</script>
+
+</body>
+</html>
